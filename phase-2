@@ -1,0 +1,127 @@
+# Import necessary libraries
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_absolute_error, mean_squared_error
+import warnings
+warnings.filterwarnings("ignore")
+# 1. Data Loading and Cleaning
+# Load the dataset (ensure the file 'air_quality.csv' is in your working directory)
+df = pd.read_csv('air_quality.csv', delimiter=';')
+
+# Drop unnamed columns if present
+df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
+
+# Replace commas with dots and convert columns to numeric
+for col in df.columns:
+    df[col] = df[col].astype(str).str.replace(',', '.', regex=False)
+    df[col] = pd.to_numeric(df[col], errors='coerce')
+
+# Fill NaN values with column means
+df.fillna(df.mean(numeric_only=True), inplace=True)
+
+# Display a summary of the data
+print("Data Shape after Cleaning:", df.shape)
+print("Missing Values after Cleaning:\n", df.isnull().sum())
+
+# Perform basic EDA (Exploratory Data Analysis)
+print("\nData Description:\n", df.describe())
+
+# Visualize correlation between features
+plt.figure(figsize=(12, 8))
+sns.heatmap(df.corr(), annot=True, cmap='coolwarm', fmt='.2f')
+plt.title('Correlation Matrix of Features')
+plt.show()
+
+# 2. Feature Engineering
+# Creating new features based on existing ones (e.g., PM Ratio, Temperature-Humidity Interaction)
+if "PM2.5" in df.columns and "PM10" in df.columns:
+    df["PM_Ratio"] = df["PM2.5"] / df["PM10"]
+
+if "Temperature" in df.columns and "RH" in df.columns:
+    df["Humidity_Temp_Interaction"] = df["RH"] * df["Temperature"]
+
+# Extract only numeric features for further analysis
+df_numeric = df.select_dtypes(include=np.number)
+
+# Check for NaN values and drop rows with NaN (if any)
+df_numeric.dropna(inplace=True)
+
+# Scale the features for machine learning models
+scaler = StandardScaler()
+df_scaled = scaler.fit_transform(df_numeric)
+
+# Apply PCA (Principal Component Analysis) to reduce dimensionality (optional, depends on your data)
+pca = PCA(n_components=5)  # Reduce to 5 principal components
+df_pca = pca.fit_transform(df_scaled)
+
+# 3. Model Development
+# Prepare data for training the model
+# Use PM2.5 as the target variable (y) and the rest as features (X)
+X = df_pca  # Using PCA transformed data
+y = df["PM2.5"]
+
+# Split the data into training and testing sets (80% training, 20% testing)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Initialize and train a Random Forest Regressor model
+model = RandomForestRegressor(n_estimators=100, random_state=42)
+model.fit(X_train, y_train)
+
+# Make predictions using the test data
+y_pred = model.predict(X_test)
+
+# Evaluate the model using MAE (Mean Absolute Error) and RMSE (Root Mean Squared Error)
+mae = mean_absolute_error(y_test, y_pred)
+rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+
+print(f"\nModel Evaluation:\n")
+print(f"Mean Absolute Error (MAE): {mae:.2f}")
+print(f"Root Mean Squared Error (RMSE): {rmse:.2f}")
+
+# 4. Documentation & Reporting
+
+report = """
+# Air Quality Prediction Report
+
+## 1. Introduction
+Air quality prediction is essential for public health, urban planning, and climate change studies. This project aims to predict air quality levels using machine learning algorithms on air quality data, including pollutants such as PM2.5, PM10, and others.
+
+## 2. Data Collection
+The dataset contains various air quality parameters for different cities/stations, including PM2.5, PM10, temperature, humidity, and others. The data has been pre-processed to remove missing values and ensure all columns are in numeric format.
+
+## 3. Data Cleaning & EDA
+- The dataset was cleaned by replacing commas with dots for numeric values.
+- Missing values were filled with column means to ensure a complete dataset.
+- A heatmap was generated to observe the correlation between various features.
+
+## 4. Feature Engineering
+- New features such as 'PM_Ratio' (PM2.5 / PM10) and 'Humidity_Temp_Interaction' (Temperature * Humidity) were created to capture possible interactions between the features and improve model performance.
+
+## 5. Model Development
+- A Random Forest Regressor model was trained to predict PM2.5 levels.
+- The model's performance was evaluated using Mean Absolute Error (MAE) and Root Mean Squared Error (RMSE).
+- The model achieved the following evaluation metrics:
+    - MAE: {mae:.2f}
+    - RMSE: {rmse:.2f}
+
+## 6. Conclusion
+The model successfully predicts air quality levels (PM2.5) based on various environmental factors. Further improvements can be made by using advanced models such as Gradient Boosting, tuning hyperparameters, or incorporating additional features.
+
+## 7. References
+- Air Quality Index Dataset: [Source Link]
+"""
+
+# Print the report with the evaluation metrics
+print("\nReport:")
+print(report.format(mae=mae, rmse=rmse))
+
+# Save the report to a text file
+with open("Air_Quality_Prediction_Report.txt", "w") as file:
+    file.write(report.format(mae=mae, rmse=rmse))
+
